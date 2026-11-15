@@ -348,3 +348,35 @@ footer { margin-top: 28px; font-size: 12.5px; color: var(--ink-3); text-align: c
 .verdict h3 { font-size: 17px; color: #0c6c66; margin-bottom: 6px; }
 .verdict p { font-size: 14px; max-width: 95ch; }
 @media (max-width: 960px) { .idea { grid-template-columns: 1fr; } }
+
+/* ---------- K-Means heat grid and Ask tab ---------- */
+@keyframes sc-gather { from { transform: translate(var(--sx), var(--sy)); fill: #9daabd; } 55% { fill: #9daabd; } }
+.heatWrap { overflow-x: auto; margin-top: 10px; }
+table.heat { border-collapse: separate; border-spacing: 3px; width: 100%; font-size: 12.5px; }
+table.heat th { position: static; background: none; padding: 2px 4px; font-weight: 600; color: var(--ink-2); text-align: center; }
+table.heat tbody th { text-align: right; padding-right: 8px; }
+table.heat td { border: 0; border-radius: 6px; text-align: center; padding: 7px 0; min-width: 34px; font-weight: 700; font-variant-numeric: tabular-nums; transition: opacity .15s; cursor: default; }
+table.heat td.empty { background: #f1f3f8; }
+.heatTip { font-size: 12.5px; color: var(--ink-2); margin-top: 8px; min-height: 19px; }
+.patterns { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; margin-top: 8px; }
+.patterns button { display: grid; grid-template-columns: 14px 1fr; gap: 2px 8px; text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; align-items: center; }
+.patterns button.on { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.patterns i { width: 14px; height: 14px; border-radius: 4px; }
+.patterns span { grid-column: 2; font-size: 12px; color: var(--ink-2); }
+.sqlNote { margin-top: 6px; font-size: 12px; padding: 8px 12px; white-space: pre-wrap; max-height: none; }
+.askBar { display: flex; gap: 10px; margin-top: 18px; }
+.askBar input { flex: 1; padding: 12px 14px; font-size: 15px; }
+.mode { margin-top: 10px; font-size: 13px; color: var(--ink-2); background: var(--grey-soft); border-radius: 9px; padding: 9px 12px; }
+.mode.on { background: var(--teal-soft); color: #0c6c66; }
+.mode details { margin-top: 6px; }
+.mode summary { cursor: pointer; font-weight: 600; }
+.mode details input { margin-top: 6px; width: min(420px, 100%); }
+.chips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.chips button { background: #fff; border: 1px solid #c3cadb; border-radius: 9px; padding: 8px 12px; font-size: 13.5px; text-align: start; }
+.chips button:hover:not(:disabled) { border-color: var(--indigo); color: var(--indigo); background: var(--indigo-soft); }
+.answer { margin-top: 20px; border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; animation: rise .25s ease; }
+.answer header { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.answer h4 { font-size: 16px; }
+.answer .tbl { margin-top: 12px; }
+.ask .banner { margin-top: 14px; }
+@media (max-width: 960px) { .chips { grid-template-columns: 1fr; } }

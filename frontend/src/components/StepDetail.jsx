@@ -3,10 +3,11 @@ import DataTable from "./DataTable.jsx";
 import AnomalyChart from "./AnomalyChart.jsx";
 import MetricBars from "./MetricBars.jsx";
 import Scene from "./Scene.jsx";
+import PatternHeat from "./PatternHeat.jsx";
 
 const KIND_LABEL = { notebook: "Notebook code", program: "Program code", system: "Web app" };
 
-export default function StepDetail({ step, code, points, animate = true }) {
+export default function StepDetail({ step, code, points, heat, animate = true }) {
   const functions = step.functions.filter((name) => code[name]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(functions[0]);
@@ -95,6 +96,7 @@ export default function StepDetail({ step, code, points, animate = true }) {
       )}
 
       {ran && step.chart === "anomaly" && points && <AnomalyChart data={points} />}
+      {ran && step.chart === "heat" && heat && <PatternHeat heat={heat} />}
       {ran && step.bars && <MetricBars rows={step.bars} />}
 
       {ran && step.images && (

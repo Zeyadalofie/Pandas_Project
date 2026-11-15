@@ -6,12 +6,14 @@ import FlowView from "./components/FlowView.jsx";
 import TraceView from "./components/TraceView.jsx";
 import OutputsView from "./components/OutputsView.jsx";
 import AiView, { AiIdea } from "./components/AiView.jsx";
+import AskView from "./components/AskView.jsx";
 
 // Animation speed: how long each step's scene plays before the next step is revealed.
 const SPEEDS = { Normal: { ms: 2900, k: 1 }, Fast: { ms: 1300, k: 0.42 }, Off: { ms: 350, k: 0.001 } };
 const TABS = [
   ["steps", "Step by step"],
   ["ai", "AI project"],
+  ["ask", "Ask the data"],
   ["flow", "Data flow"],
   ["trace", "Trace a row"],
   ["outputs", "Outputs"],
@@ -185,10 +187,11 @@ export default function App() {
                   setSelected(i);
                 }}
               />
-              {current && <StepDetail step={current} code={run?.code ?? info?.code ?? {}} points={run?.points} animate={speed !== "Off"} />}
+              {current && <StepDetail step={current} code={run?.code ?? info?.code ?? {}} points={run?.points} heat={run?.heat} animate={speed !== "Off"} />}
             </div>
           )}
-          {tab === "ai" && finished && <AiView steps={steps} points={run.points} />}
+          {tab === "ai" && finished && <AiView steps={steps} points={run.points} heat={run.heat} />}
+          {tab === "ask" && finished && <AskView runId={runId} examples={run.examples ?? []} keyOnServer={info?.llm_key_on_server} />}
           {tab === "flow" && finished && <FlowView flow={run.flow} />}
           {tab === "trace" && finished && <TraceView rows={run.rows} />}
           {tab === "outputs" && finished && <OutputsView outputs={run.outputs} />}

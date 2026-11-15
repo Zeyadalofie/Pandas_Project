@@ -342,6 +342,56 @@ const SCENES = {
       </g>
     </g>
   ),
+
+  ai5: (step) => {
+    const groups = [[C.indigo, 250, 92], [C.teal, 450, 132], [C.amber, 650, 88], [C.grey, 800, 150]];
+    const k = Math.min(metric(step, "patterns chosen") ?? 3, 4);
+    return (
+      <g>
+        <text x="450" y="30" textAnchor="middle" className="scLabel">each dot is one hour of the week; similar hours gather into a pattern</text>
+        {Array.from({ length: 36 }, (_, i) => {
+          const g = i % k, [color, gx, gy] = groups[g];
+          const x = gx + Math.cos(i * 2.4) * (14 + (i % 5) * 6), y = gy + Math.sin(i * 2.4) * (10 + (i % 4) * 5);
+          const sx = 80 + ((i * 97) % 740) - x, sy = 60 + ((i * 53) % 130) - y;
+          return <circle key={i} cx={x} cy={y} r="7" fill={color} style={{ ...an("sc-gather", 1.3, 0.2 + (i % 6) * 0.08, "cubic-bezier(.4,0,.2,1)"), "--sx": `${sx}px`, "--sy": `${sy}px` }} />;
+        })}
+        {groups.slice(0, k).map(([color, gx, gy], i) => (
+          <g key={i} className="popBox" style={an("sc-pop", 0.45, 1.6 + i * 0.12)}>
+            <circle cx={gx} cy={gy} r="52" fill="none" stroke={color} strokeWidth="2.5" strokeDasharray="6 6" />
+            <text x={gx} y={gy + 74} textAnchor="middle" className="scTiny">Pattern {i + 1}</text>
+          </g>
+        ))}
+      </g>
+    );
+  },
+
+  ai6: () => (
+    <g>
+      <g style={{ ...an("sc-fromLeft", 0.6, 0.1), "--dx": "-200px" }}>
+        <path d="M60 60h250a14 14 0 0 1 14 14v44a14 14 0 0 1-14 14H110l-22 20v-20H60a14 14 0 0 1-14-14V74a14 14 0 0 1 14-14z" fill={C.paper} stroke={C.indigo} strokeWidth="2.5" />
+        <text x="185" y="92" textAnchor="middle" className="scLabel">Which region is busiest?</text>
+        <text x="185" y="114" textAnchor="middle" className="scLabel">أي منطقة أكثر طلبات؟</text>
+      </g>
+      <path d="M336 100h44m-12-9 12 9-12 9" fill="none" stroke={C.ink} strokeWidth="3" strokeLinecap="round" style={an("sc-fade", 0.3, 0.8)} />
+      <g style={an("sc-rise", 0.5, 0.9)}>
+        <rect x="392" y="62" width="200" height="76" rx="10" fill={C.ink} />
+        <text x="408" y="88" className="scTiny" fill="#9fe8e2">SELECT region, COUNT(*)</text>
+        <text x="408" y="106" className="scTiny" fill="#9fe8e2">FROM requests</text>
+        <text x="408" y="124" className="scTiny" fill="#9fe8e2">GROUP BY region</text>
+      </g>
+      <g className="popBox" style={an("sc-pop", 0.4, 1.5)}>
+        <path d="M492 150l26 10v20c0 16-12 26-26 32-14-6-26-16-26-32v-20z" fill={C.teal} />
+        <path d="M480 180l9 9 16-18" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
+      </g>
+      <text x="560" y="186" className="scTiny" style={an("sc-fade", 0.4, 1.7)}>read-only check</text>
+      <path d="M604 100h44m-12-9 12 9-12 9" fill="none" stroke={C.ink} strokeWidth="3" strokeLinecap="round" style={an("sc-fade", 0.3, 1.9)} />
+      <g style={an("sc-rise", 0.5, 2.0)}>
+        <rect x="660" y="52" width="190" height="112" rx="8" fill={C.paper} stroke={C.soft} strokeWidth="2" />
+        <rect x="660" y="52" width="190" height="20" rx="8" fill={C.teal} />
+        {[150, 118, 96].map((w, r) => <rect key={r} x="672" y={84 + r * 24} width={w} height="12" rx="6" fill={C.indigo} opacity={0.85 - r * 0.2} />)}
+      </g>
+    </g>
+  ),
 };
 
 export default function Scene({ step, live, replay }) {

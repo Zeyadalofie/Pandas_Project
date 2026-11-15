@@ -1,6 +1,7 @@
 import React from "react";
 import AnomalyChart from "./AnomalyChart.jsx";
 import MetricBars from "./MetricBars.jsx";
+import PatternHeat from "./PatternHeat.jsx";
 
 const find = (steps, id) => steps.find((s) => s.id === id) ?? {};
 const metric = (step, label) => step.metrics?.find((m) => m.label === label)?.value;
@@ -27,7 +28,7 @@ export function AiIdea() {
   );
 }
 
-export default function AiView({ steps, points }) {
+export default function AiView({ steps, points, heat }) {
   const ai1 = find(steps, "ai1"), ai2 = find(steps, "ai2"), ai3 = find(steps, "ai3"), ai4 = find(steps, "ai4");
   const agreement = ai2.tables?.[0]?.rows ?? [];
   const bars = Object.fromEntries((ai3.bars ?? []).map((r) => [r.detector, r]));
@@ -71,6 +72,24 @@ export default function AiView({ steps, points }) {
         <h3>{ai4.headline}</h3>
         <p>{ai4.text}</p>
       </div>
+
+      {heat && (
+        <>
+          <h3 className="sec">Second idea: demand patterns with K-Means</h3>
+          <p className="lead">
+            Every hour of the week is described by how many requests arrive, how long they take and which types they are.
+            K-Means groups similar hours into {heat.k} patterns; the number of patterns is the one with the best silhouette
+            score. Here the separation is {heat.strength} (silhouette {heat.silhouette}), so read the patterns as
+            {heat.strength === "weak" ? " a rough guide, not sharp groups" : " meaningful groups"}.
+          </p>
+          <PatternHeat heat={heat} />
+        </>
+      )}
+
+      <h3 className="sec">Third idea: ask the data in plain language</h3>
+      <p className="lead">
+        A question in Arabic or English becomes one read-only SQL query. Try it in the <b>Ask the data</b> tab.
+      </p>
     </section>
   );
 }

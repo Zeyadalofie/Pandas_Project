@@ -45,7 +45,7 @@ export default function DataTable({ table }) {
           </tbody>
         </table>
       </div>
-      {table.note && <p className="note">{table.note}</p>}
+      {table.note && (/^\s*(select|with)\b/i.test(table.note) ? <pre className="sqlNote">{table.note}</pre> : <p className="note">{table.note}</p>)}
     </figure>
   );
 }

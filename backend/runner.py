@@ -6,7 +6,9 @@ web page can show where the data went.
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import sqlite3
 import threading
@@ -17,7 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from notebook_loader import load_notebook
+from notebook_loader import BONUS_CHARTS_KEY, load_notebook
 
 EXPECTED_FILES = ("jan_requests.csv", "feb_requests.csv", "team_data.db", "targets.csv")
 PLOT_LOCK = threading.Lock()   # matplotlib's pyplot is not safe across threads
@@ -34,11 +36,13 @@ STEP_SPECS = [
     ("ex08", "EX08", "Draw the three team figures", "notebook", "Role D · Fahad Hamdan Alharbi", ["make_team_figures"]),
     ("ex09", "EX09", "Run the full pipeline and verify the outputs", "notebook", "Team", ["run_pipeline", "_csv_bytes"]),
     ("ex10", "EX10", "Facts and findings brief", "notebook", "Role D + Team", ["brief_facts"]),
-    ("bonus", "Bonus", "SQL insights on the analytical table", "notebook", "Mohammed Almogbel", ["handling_sql", "quality_sql"]),
+    ("bonus", "Bonus", "SQL insights on the analytical table", "notebook", "Mohammed Almogbel", ["handling_sql", "quality_sql", BONUS_CHARTS_KEY]),
     ("ai1", "AI-1", "Build the modelling table and detectors", "program", "AI project", ["build_model_table", "mad_scores", "forest_scores"]),
     ("ai2", "AI-2", "Score the real data and learn ceilings", "program", "AI project", ["score_table", "rule_agreement", "suggested_ceilings", "review_candidates"]),
     ("ai3", "AI-3", "Controlled test with injected anomalies", "program", "AI project", ["injection_experiment", "paired_gap"]),
     ("ai4", "AI-4", "AI figures, facts and brief", "program", "AI project", ["make_ai_figures", "ai_brief_facts", "write_ai_outputs"]),
+    ("ai5", "AI-5", "Demand patterns with K-Means", "program", "AI project", ["demand_slots", "cluster_slots", "pattern_summary", "desk_load", "make_pattern_figure"]),
+    ("ai6", "AI-6", "Ask the data: question to safe SQL", "program", "AI project", ["answer_question", "validate_select", "run_safe_query", "build_sql_prompt", "ask_llm_for_sql"]),
 ]
 
 
@@ -73,12 +77,15 @@ class Run:
         self.outputs: list = []
         self.code: dict = {}
         self.ctx: dict = {}
+        self.examples: list = []
+        self.heat: dict | None = None
 
     # ------------------------------------------------------------------ public
     def snapshot(self) -> dict:
         return {"id": self.id, "status": self.status, "error": self.error, "steps": self.steps,
                 "flow": self.flow, "rows": self.rows, "points": self.points,
-                "outputs": self.outputs, "code": self.code}
+                "outputs": self.outputs, "code": self.code,
+                "examples": self.examples, "heat": self.heat}
 
     def execute(self) -> None:
         try:
@@ -294,15 +301,39 @@ class Run:
         out.mkdir(parents=True, exist_ok=True)
         handling.to_csv(out / "handling_by_type_month.csv", index=False)
         quality.to_csv(out / "missing_minutes_by_region_month.csv", index=False)
-        self.outputs += [{"group": "Bonus (SQL)", "name": n, "url": self._url(f"bonus_output/{n}")}
-                         for n in ("handling_by_type_month.csv", "missing_minutes_by_region_month.csv")]
-        return {"headline": "The notebook's two SQL queries run on a temporary in-memory copy; the original database is untouched.",
+        names = ["handling_by_type_month.csv", "missing_minutes_by_region_month.csv"]
+        checks = [{"label": "SQL totals equal the analytical table",
+                   "ok": int(handling["accepted_requests"].sum()) == len(analytical)}]
+        # The two bonus charts: run the notebook's chart cell exactly as written. Only the
+        # variables it expects are supplied, with BONUS_DIR pointing at this run's folder.
+        images, printed = [], ""
+        cell = self.code.get(BONUS_CHARTS_KEY)
+        if cell:
+            scope = dict(ns, handling_sql_result=handling, quality_sql_result=quality,
+                         BONUS_DIR=out, result=self.ctx["result"])
+            captured = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(captured):
+                    exec(compile(cell["code"], "<notebook bonus charts cell>", "exec"), scope)
+                charts = sorted(p.name for p in out.glob("*.png"))
+                images = [{"title": n, "url": self._url(f"bonus_output/{n}")} for n in charts]
+                names += charts
+                printed = " ".join(captured.getvalue().split())
+                checks.append({"label": "bonus charts drawn by the notebook's own cell", "ok": len(charts) == 2})
+            except Exception as exc:
+                ns["plt"].close("all")
+                checks.append({"label": f"bonus charts could not be drawn on this data ({type(exc).__name__}: {exc})", "ok": False})
+        self.outputs += [{"group": "Bonus (SQL)", "name": n, "url": self._url(f"bonus_output/{n}")} for n in names]
+        extra = {"images": images} if images else {}
+        if printed:
+            extra.update(text=printed, text_title="Printed by the notebook cell")
+        return {**extra,
+                "headline": "The notebook's two SQL queries run on a temporary in-memory copy; the original database is untouched.",
                 "metrics": [{"label": "missing durations", "value": int(quality["missing_minutes"].sum())},
                             {"label": "known durations", "value": int(handling["known_duration_count"].sum())}],
-                "checks": [{"label": "SQL totals equal the analytical table",
-                            "ok": int(handling["accepted_requests"].sum()) == len(analytical)}],
+                "checks": checks,
                 "reads": ["memory: analytical table → temporary SQLite"],
-                "writes": ["bonus_output/handling_by_type_month.csv", "bonus_output/missing_minutes_by_region_month.csv"],
+                "writes": [f"bonus_output/{n}" for n in names],
                 "tables": [table(handling, "Bonus A — handling minutes by request type and month"),
                            table(quality, "Bonus B — missing durations by region and month")]}
 
@@ -365,7 +396,6 @@ class Run:
         manifest = c["result"]["manifest"]["files_sha256"]
         untouched = all(sha256((self.dir / "team_output" / n).read_bytes()) == d for n, d in manifest.items())
         self.outputs += [{"group": "AI project", "name": n, "url": self._url(f"ai_output/{n}")} for n in names]
-        self._finish()
         fact_rows = [[k, round(v, 4) if isinstance(v, float) else v] for k, v in facts.items()]
         return {"headline": f"Verdict from the measured numbers: {facts['better_detector']}.",
                 "checks": [{"label": "required outputs are byte-for-byte unchanged by the AI project", "ok": untouched}],
@@ -374,6 +404,70 @@ class Run:
                 "tables": [{"title": "AI facts", "columns": ["fact", "value"], "rows": fact_rows,
                             "total": len(fact_rows), "note": None}],
                 "text": brief, "text_title": f"AI brief ({len(brief.split())} words)"}
+
+    def _ai5(self) -> dict:
+        ns, analytical = self.ns, self.ctx["result"]["analytical"]
+        slots = ns["demand_slots"](analytical)
+        clustered, scores, k = ns["cluster_slots"](slots)
+        repeat, _, _ = ns["cluster_slots"](slots)
+        summary, load = ns["pattern_summary"](clustered), ns["desk_load"](analytical)
+        figures = ns["make_pattern_figure"](clustered)
+        names = ns["write_pattern_outputs"](self.dir / "ai_output", clustered, summary, load, figures)
+        self.outputs += [{"group": "AI project", "name": n, "url": self._url(f"ai_output/{n}")} for n in names]
+        best = float(scores.loc[scores["k"] == k, "silhouette"].iloc[0])
+        strength = "clear" if best >= 0.5 else "moderate" if best >= 0.25 else "weak"
+        self.heat = {"k": k, "silhouette": round(best, 3), "strength": strength, "weekdays": ns["WEEKDAYS"],
+                     "slots": json.loads(clustered[["weekday", "hour", "requests", "mean_minutes", "pattern"]]
+                                         .round(1).to_json(orient="records")),
+                     "summary": json.loads(summary.round(3).to_json(orient="records"))}
+        return {"headline": f"K-Means groups the hours of the week into {k} demand patterns. The separation is {strength} "
+                            f"(silhouette {best:.2f}; 1 = perfectly separate, 0 = overlapping).",
+                "metrics": [{"label": "time slots (weekday × hour)", "value": int(len(slots))},
+                            {"label": "patterns chosen", "value": k},
+                            {"label": "silhouette score", "value": round(best, 3)}],
+                "checks": [{"label": "clustering twice gives identical patterns (fixed seed)", "ok": bool(clustered.equals(repeat))},
+                           {"label": "every accepted request is counted in exactly one slot",
+                            "ok": int(clustered["requests"].sum()) == len(analytical)}],
+                "reads": ["memory: analytical table (opened_at, minutes, request_type, staffed_hours)"],
+                "writes": [f"ai_output/{n}" for n in names], "chart": "heat",
+                "tables": [table(scores, "Silhouette score for each number of patterns",
+                                 note="The number of patterns with the highest score is used."),
+                           table(summary, "What each pattern looks like (pattern 1 is the busiest)"),
+                           table(load, "Desk load: known handling hours next to staffed_hours",
+                                 note="staffed_hours is used as given in the data; read the last column as a comparison between desks.")]}
+
+    def _ai6(self) -> dict:
+        ns, analytical = self.ns, self.ctx["result"]["analytical"]
+        answers = ns["run_example_questions"](analytical)
+        refused = []
+        for attack in ("DROP TABLE requests", "SELECT 1; DELETE FROM requests", "UPDATE requests SET minutes = 0"):
+            try:
+                ns["run_safe_query"](analytical, attack)
+                refused.append(False)
+            except ValueError:
+                refused.append(True)
+        log = pd.DataFrame([{"question": a["question"], "sql": a["sql"], "rows_returned": int(len(a["table"]))} for a in answers])
+        (self.dir / "ai_output" / "example_questions.csv").write_bytes(ns["_csv_bytes"](log))
+        self.outputs.append({"group": "AI project", "name": "example_questions.csv", "url": self._url("ai_output/example_questions.csv")})
+        self.examples = [{"en": e["en"], "ar": e["ar"]} for e in ns["EXAMPLE_QUESTIONS"]]
+        manifest = self.ctx["result"]["manifest"]["files_sha256"]
+        untouched = all(sha256((self.dir / "team_output" / n).read_bytes()) == d for n, d in manifest.items())
+        self._finish()
+        return {"headline": "A question becomes one SELECT statement, which runs on a read-only temporary copy. "
+                            "Open the “Ask the data” tab to try your own question.",
+                "metrics": [{"label": "built-in questions answered", "value": len(answers)},
+                            {"label": "unsafe statements refused", "value": f"{sum(refused)} of {len(refused)}"}],
+                "checks": [{"label": "DROP, DELETE and UPDATE statements are refused", "ok": all(refused)},
+                           {"label": "required outputs are still byte-for-byte unchanged", "ok": untouched}],
+                "reads": ["memory: analytical table → temporary read-only SQLite"],
+                "writes": ["ai_output/example_questions.csv", "Week06_Team06_Results.zip"],
+                "tables": [table(a["table"], a["question"], limit=10, note=a["sql"]) for a in answers]}
+
+    def ask(self, question: str, api_key: str | None) -> dict:
+        """Used by the “Ask the data” tab after the run has finished."""
+        answer = self.ns["answer_question"](question, self.ctx["result"]["analytical"], api_key=api_key)
+        return {"question": answer["question"], "sql": answer["sql"], "source": answer["source"],
+                "table": table(answer["table"], "Answer")}
 
     # ------------------------------------------------------------------ whole-run views
     def _finish(self) -> None:
