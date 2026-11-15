@@ -24,6 +24,10 @@ matplotlib.use("Agg")  # no screen on a server; figures are saved to bytes
 NOTEBOOK_PATH = Path(__file__).parent / "notebook" / "Week06_Team06_With_AI_Project.ipynb"
 PROGRAM_MARKER = "## AI Project"
 SKIPPED_MODULES = ("google", "IPython")
+# The bonus charts are written as plain cell code (not a function), so that cell is kept whole
+# and the runner executes it as it is.
+BONUS_CHARTS_MARKER = "handling_time_by_request_type.png"
+BONUS_CHARTS_KEY = "bonus_charts_cell"
 
 
 def _cell_source(cell) -> str:
@@ -68,6 +72,8 @@ def load_notebook(path: Path = NOTEBOOK_PATH):
             continue
         if cell["cell_type"] != "code":
             continue
+        if BONUS_CHARTS_MARKER in source and "savefig" in source:
+            catalog[BONUS_CHARTS_KEY] = {"kind": kind, "cell": index, "code": source}
         tree = ast.parse(source)
         for node in tree.body:
             if not _keep(node):
