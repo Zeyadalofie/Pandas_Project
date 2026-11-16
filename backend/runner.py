@@ -37,12 +37,12 @@ STEP_SPECS = [
     ("ex09", "EX09", "Run the full pipeline and verify the outputs", "notebook", "Team", ["run_pipeline", "_csv_bytes"]),
     ("ex10", "EX10", "Facts and findings brief", "notebook", "Role D + Team", ["brief_facts"]),
     ("bonus", "Bonus", "SQL insights on the analytical table", "notebook", "Mohammed Almogbel", ["handling_sql", "quality_sql", BONUS_CHARTS_KEY]),
-    ("ai1", "AI-1", "Build the modelling table and detectors", "program", "AI project", ["build_model_table", "mad_scores", "forest_scores"]),
-    ("ai2", "AI-2", "Score the real data and learn ceilings", "program", "AI project", ["score_table", "rule_agreement", "suggested_ceilings", "review_candidates"]),
-    ("ai3", "AI-3", "Controlled test with injected anomalies", "program", "AI project", ["injection_experiment", "paired_gap"]),
-    ("ai4", "AI-4", "AI figures, facts and brief", "program", "AI project", ["make_ai_figures", "ai_brief_facts", "write_ai_outputs"]),
-    ("ai5", "AI-5", "Demand patterns with K-Means", "program", "AI project", ["demand_slots", "cluster_slots", "pattern_summary", "desk_load", "make_pattern_figure"]),
-    ("ai6", "AI-6", "Ask the data: question to safe SQL", "program", "AI project", ["answer_question", "validate_select", "run_safe_query", "build_sql_prompt", "ask_llm_for_sql"]),
+    ("ai1", "AI-1", "Generate a messy dataset with known problems", "program", "AI project", ["make_messy_dataset", "planted_problems"]),
+    ("ai2", "AI-2", "Explore: find the problems", "program", "AI project", ["missing_report", "missing_patterns", "numeric_profile", "balance_report", "find_problems"]),
+    ("ai3", "AI-3", "Study the gaps and fill them", "program", "AI project", ["impute_dataset", "choose_statistic", "evaluate_fill_methods", "candidate_fills", "knn_fill", "fill_categorical"]),
+    ("ai4", "AI-4", "Treat dispersion and skew", "program", "AI project", ["treat_dispersion", "cap_outliers", "power_transform"]),
+    ("ai5", "AI-5", "Balance with synthetic data (SMOTE-NC)", "program", "AI project", ["balance_with_smote", "balance_table", "synthetic_quality"]),
+    ("ai6", "AI-6", "Unsupervised model: before vs after", "program", "AI project", ["compare_preparations", "model_features", "fit_clusters", "cluster_points", "prep_brief_facts"]),
 ]
 
 
@@ -73,19 +73,16 @@ class Run:
                        "functions": s[5], "status": "pending"} for s in STEP_SPECS]
         self.flow: dict | None = None
         self.rows: list | None = None
-        self.points: list | None = None
+        self.prep: dict = {}
         self.outputs: list = []
         self.code: dict = {}
         self.ctx: dict = {}
-        self.examples: list = []
-        self.heat: dict | None = None
 
     # ------------------------------------------------------------------ public
     def snapshot(self) -> dict:
         return {"id": self.id, "status": self.status, "error": self.error, "steps": self.steps,
-                "flow": self.flow, "rows": self.rows, "points": self.points,
-                "outputs": self.outputs, "code": self.code,
-                "examples": self.examples, "heat": self.heat}
+                "flow": self.flow, "rows": self.rows, "prep": self.prep,
+                "outputs": self.outputs, "code": self.code}
 
     def execute(self) -> None:
         try:
@@ -338,144 +335,149 @@ class Run:
                            table(quality, "Bonus B — missing durations by region and month")]}
 
     def _ai1(self) -> dict:
-        model_table, unscored = self.ns["build_model_table"](self.ctx["result"]["cleaned"])
-        self.ctx.update(model_table=model_table, unscored=unscored)
-        return {"headline": "Rows with a known duration are collected: accepted rows plus rows the rule rejected only for their minutes.",
-                "metrics": [{"label": "rows to score", "value": int(len(model_table))},
-                            {"label": "rejected by the 480 rule", "value": int(model_table["rule_rejected"].sum())},
-                            {"label": "missing durations (not scored)", "value": int(unscored)}],
-                "reads": ["memory: cleaned[month].accepted", "memory: cleaned[month].rejected"],
-                "writes": ["memory: model table"], "tables": [table(model_table, "Modelling table", limit=8)]}
+        ns = self.ns
+        truth, messy = ns["make_messy_dataset"](self.ctx["result"]["analytical"])
+        _, again = ns["make_messy_dataset"](self.ctx["result"]["analytical"])
+        self.ctx.update(truth=truth, messy=messy)
+        return {"headline": "A synthetic dataset is generated with problems planted on purpose. Its request types, regions and "
+                            "typical durations are learned from the pipeline's analytical table.",
+                "metrics": [{"label": "rows generated", "value": int(len(messy))},
+                            {"label": "columns", "value": int(messy.shape[1])},
+                            {"label": "empty cells", "value": int(messy.isna().sum().sum())}],
+                "checks": [{"label": "generating twice gives the identical dataset (fixed seed)", "ok": bool(messy.equals(again))}],
+                "reads": ["memory: analytical table (category names and typical minutes only)"],
+                "writes": ["memory: messy dataset", "memory: hidden truth (kept aside for the final check only)"],
+                "tables": [table(ns["planted_problems"](), "Problems planted on purpose"),
+                           table(messy, "The messy dataset", limit=10)]}
 
     def _ai2(self) -> dict:
-        ns = self.ns
-        scored = ns["score_table"](self.ctx["model_table"])
-        agreement, ceilings = ns["rule_agreement"](scored), ns["suggested_ceilings"](scored)
-        review = ns["review_candidates"](scored)
-        self.ctx.update(scored=scored, agreement=agreement, ceilings=ceilings, review=review)
-        repeat = ns["score_table"](self.ctx["model_table"])
-        limits = dict(zip(ceilings["request_type"], ceilings["suggested_ceiling"]))
-        self.points = {"max_minutes": ns["MAX_MINUTES"], "ceilings": {k: float(v) for k, v in limits.items()},
-                       "rows": json.loads(scored[["source", "source_row", "request_id", "request_type", "minutes",
-                                                  "rule_rejected", "both_flag", "mad_score", "forest_score"]]
-                                          .round(3).to_json(orient="records"))}
-        return {"headline": "Two detectors score every row: a per-type robust statistic (baseline) and an Isolation Forest (model).",
-                "metrics": [{"label": "accepted rows flagged by both", "value": int(len(review))},
-                            {"label": "lowest learned ceiling (min)", "value": round(float(ceilings["suggested_ceiling"].min()), 1)},
-                            {"label": "highest learned ceiling (min)", "value": round(float(ceilings["suggested_ceiling"].max()), 1)},
-                            {"label": "fixed ceiling (min)", "value": ns["MAX_MINUTES"]}],
-                "checks": [{"label": "scoring twice gives identical results (fixed seed)", "ok": bool(scored.equals(repeat))}],
-                "reads": ["memory: model table"], "writes": ["memory: scores, flags, learned ceilings"],
-                "chart": "anomaly",
-                "tables": [table(agreement, "Agreement with the fixed rule"),
-                           table(ceilings, "Ceiling learned for each request type"),
-                           table(review, "Accepted rows both detectors call unusual", limit=15)]}
+        ns, messy = self.ns, self.ctx["messy"]
+        missing, patterns = ns["missing_report"](messy), ns["missing_patterns"](messy)
+        profile = ns["numeric_profile"](messy)
+        balance, ratio = ns["balance_report"](messy)
+        problems = ns["find_problems"](missing, patterns, profile, ratio)
+        figures = ns["make_eda_figures"](messy, missing, balance)
+        self.ctx.update(missing=missing, patterns=patterns, profile=profile, balance=balance, ratio=ratio,
+                        problems=problems, figures=dict(figures))
+        self.prep["missing"] = [{"label": r["column"], "a": round(r["missing_pct"], 1)} for r in missing.to_dict("records")]
+        self.prep["balance_before"] = [{"label": r[ns["GROUP"]], "a": int(r["rows"])} for r in balance.to_dict("records")]
+        self.prep["profile"] = json.loads(profile.round(3).to_json(orient="records"))
+        return {"headline": f"Nothing is changed yet. The exploration measures the problems and writes a to-do list: "
+                            f"{len(problems)} problems found.",
+                "metrics": [{"label": "columns with gaps", "value": int(len(missing))},
+                            {"label": "worst column missing", "value": f"{missing['missing_pct'].max():.1f}%"},
+                            {"label": "gap patterns detected", "value": int(patterns["follows_pattern"].sum())},
+                            {"label": "largest ÷ smallest region", "value": round(ratio, 1)}],
+                "reads": ["memory: messy dataset"], "writes": ["memory: measurements and list of problems"],
+                "chart": "explore", "images": self._save_images("ai_preview", figures),
+                "tables": [table(problems, "Problems found, evidence and planned treatment"),
+                           table(missing, "Missing values by column"),
+                           table(patterns, "Do the gaps follow a pattern?",
+                                 note="A large spread means the gap rate depends on that group, so a single overall value would be a poor fill."),
+                           table(profile, "Shape of the numeric columns",
+                                 note="cv = standard deviation ÷ mean (spread). skew above 1 = long right tail. outlier_share = share beyond the IQR fences."),
+                           table(balance, "Class balance")]}
 
     def _ai3(self) -> dict:
-        ns = self.ns
-        runs, summary, injected = ns["injection_experiment"](self.ctx["scored"])
-        gap, gap_se = ns["paired_gap"](runs)
-        self.ctx.update(injection_summary=summary, ap_gap=gap, ap_gap_se=gap_se)
-        return {"headline": "Known anomalies are hidden under the 480 ceiling in 20 seeded runs, so precision and recall can be measured.",
-                "metrics": [{"label": "anomalies injected per run", "value": int(injected)},
-                            {"label": "runs", "value": int(runs["run"].nunique())},
-                            {"label": "avg. precision gap (forest − baseline)", "value": f"{gap:+.3f} ± {gap_se:.3f}"}],
-                "reads": ["memory: scored table (rows not already suspected)"],
-                "writes": ["memory: per-run metrics, summary"],
-                "bars": json.loads(summary.round(4).to_json(orient="records")),
-                "tables": [table(summary, "Mean and spread over the runs",
-                                 note="The fixed rule scores zero recall by design: the injected values stay under its ceiling.")]}
+        ns, messy = self.ns, self.ctx["messy"]
+        filled, decisions = ns["impute_dataset"](messy, self.ctx["truth"])
+        self.ctx.update(filled=filled, decisions=decisions)
+        left = int(filled[ns["NUMERIC"] + ns["CATEGORICAL"]].isna().sum().sum())
+        medians = int((decisions["mean_or_median"] == "median").sum())
+        error_columns = [c for c in decisions.columns if c.startswith("error: ")]
+        self.prep["fill"] = [{"column": r["column"], "statistic": r["mean_or_median"], "method": r["method_used"],
+                              "errors": [{"label": c.replace("error: ", ""), "a": round(r[c], 3)} for c in error_columns]}
+                             for r in decisions.to_dict("records")]
+        return {"headline": f"Each gap is filled by the method with the lowest measured error. {medians} of {len(decisions)} "
+                            f"numeric columns use the median because they are skewed or heavy-tailed.",
+                "metrics": [{"label": "cells filled", "value": int(messy.isna().sum().sum())},
+                            {"label": "gaps left", "value": left},
+                            {"label": "columns using the median", "value": medians},
+                            {"label": "columns using the mean", "value": int(len(decisions) - medians)}],
+                "checks": [{"label": "no gaps remain", "ok": left == 0},
+                           {"label": "no row was dropped", "ok": len(filled) == len(messy)}],
+                "reads": ["memory: messy dataset"], "writes": ["memory: filled dataset (+ a was_missing flag per column)"],
+                "chart": "fill",
+                "tables": [table(decisions, "How each column was filled, and the error of every method (lower is better)",
+                                 note="Errors are measured by hiding 15% of known values, 5 seeded rounds. The last two columns compare with the generator's hidden truth."),
+                           table(filled, "Dataset after filling", limit=8)]}
 
     def _ai4(self) -> dict:
-        ns, c = self.ns, self.ctx
-        figures = ns["make_ai_figures"](c["scored"], c["ceilings"], c["injection_summary"])
-        facts, brief = ns["ai_brief_facts"](c["scored"], c["agreement"], c["ceilings"], c["review"],
-                                            c["injection_summary"], c["unscored"], c["ap_gap"], c["ap_gap_se"])
-        names = ns["write_ai_outputs"](self.dir / "ai_output", c["scored"], c["ceilings"],
-                                       c["injection_summary"], brief, figures)
-        manifest = c["result"]["manifest"]["files_sha256"]
-        untouched = all(sha256((self.dir / "team_output" / n).read_bytes()) == d for n, d in manifest.items())
-        self.outputs += [{"group": "AI project", "name": n, "url": self._url(f"ai_output/{n}")} for n in names]
-        fact_rows = [[k, round(v, 4) if isinstance(v, float) else v] for k, v in facts.items()]
-        return {"headline": f"Verdict from the measured numbers: {facts['better_detector']}.",
-                "checks": [{"label": "required outputs are byte-for-byte unchanged by the AI project", "ok": untouched}],
-                "reads": ["memory: scores, ceilings, test summary"], "writes": [f"ai_output/{n}" for n in names],
-                "images": [{"title": n, "url": self._url(f"ai_output/{n}")} for n in names if n.endswith(".png")],
-                "tables": [{"title": "AI facts", "columns": ["fact", "value"], "rows": fact_rows,
-                            "total": len(fact_rows), "note": None}],
-                "text": brief, "text_title": f"AI brief ({len(brief.split())} words)"}
+        ns = self.ns
+        prepared, report = ns["treat_dispersion"](self.ctx["filled"])
+        self.ctx.update(prepared=prepared, dispersion=report)
+        self.prep["dispersion"] = json.loads(report.round(3).to_json(orient="records"))
+        return {"headline": "Extreme values are capped inside their own request type, not deleted, and a power transform removes the long tail.",
+                "metrics": [{"label": "values capped", "value": int(report["values_capped"].sum())},
+                            {"label": "rows deleted", "value": 0},
+                            {"label": "handling skew before", "value": round(float(report.iloc[0]["skew_before"]), 2)},
+                            {"label": "handling skew after", "value": round(float(report.iloc[0]["skew_after_transform"]), 2)}],
+                "checks": [{"label": "every row is kept", "ok": len(prepared) == len(self.ctx["filled"])}],
+                "reads": ["memory: filled dataset"], "writes": ["memory: prepared dataset"], "chart": "dispersion",
+                "tables": [table(report, "Dispersion and skew, before and after")]}
 
     def _ai5(self) -> dict:
-        ns, analytical = self.ns, self.ctx["result"]["analytical"]
-        slots = ns["demand_slots"](analytical)
-        clustered, scores, k = ns["cluster_slots"](slots)
-        repeat, _, _ = ns["cluster_slots"](slots)
-        summary, load = ns["pattern_summary"](clustered), ns["desk_load"](analytical)
-        figures = ns["make_pattern_figure"](clustered)
-        names = ns["write_pattern_outputs"](self.dir / "ai_output", clustered, summary, load, figures)
-        self.outputs += [{"group": "AI project", "name": n, "url": self._url(f"ai_output/{n}")} for n in names]
-        best = float(scores.loc[scores["k"] == k, "silhouette"].iloc[0])
-        strength = "clear" if best >= 0.5 else "moderate" if best >= 0.25 else "weak"
-        self.heat = {"k": k, "silhouette": round(best, 3), "strength": strength, "weekdays": ns["WEEKDAYS"],
-                     "slots": json.loads(clustered[["weekday", "hour", "requests", "mean_minutes", "pattern"]]
-                                         .round(1).to_json(orient="records")),
-                     "summary": json.loads(summary.round(3).to_json(orient="records"))}
-        return {"headline": f"K-Means groups the hours of the week into {k} demand patterns. The separation is {strength} "
-                            f"(silhouette {best:.2f}; 1 = perfectly separate, 0 = overlapping).",
-                "metrics": [{"label": "time slots (weekday × hour)", "value": int(len(slots))},
-                            {"label": "patterns chosen", "value": k},
-                            {"label": "silhouette score", "value": round(best, 3)}],
-                "checks": [{"label": "clustering twice gives identical patterns (fixed seed)", "ok": bool(clustered.equals(repeat))},
-                           {"label": "every accepted request is counted in exactly one slot",
-                            "ok": int(clustered["requests"].sum()) == len(analytical)}],
-                "reads": ["memory: analytical table (opened_at, minutes, request_type, staffed_hours)"],
-                "writes": [f"ai_output/{n}" for n in names], "chart": "heat",
-                "tables": [table(scores, "Silhouette score for each number of patterns",
-                                 note="The number of patterns with the highest score is used."),
-                           table(summary, "What each pattern looks like (pattern 1 is the busiest)"),
-                           table(load, "Desk load: known handling hours next to staffed_hours",
-                                 note="staffed_hours is used as given in the data; read the last column as a comparison between desks.")]}
+        ns, prepared = self.ns, self.ctx["prepared"]
+        balanced = ns["balance_with_smote"](prepared)
+        after, quality = ns["balance_table"](prepared, balanced), ns["synthetic_quality"](balanced)
+        self.ctx.update(balanced=balanced, balance_after=after, quality=quality)
+        self.prep["balance_after"] = [{"label": r[ns["GROUP"]], "a": int(r["real_rows"]), "b": int(r["synthetic_rows"])}
+                                      for r in after.to_dict("records")]
+        synthetic = int(balanced["is_synthetic"].sum())
+        worst = float(quality["ks_distance"].max()) if len(quality) else 0.0
+        return {"headline": "SMOTE-NC builds each new row between a real row of the small region and one of its nearest neighbours, "
+                            "so new rows follow the real pattern instead of copying it.",
+                "metrics": [{"label": "synthetic rows added", "value": synthetic},
+                            {"label": "rows after balancing", "value": int(len(balanced))},
+                            {"label": "largest KS distance (0 = identical)", "value": round(worst, 3)}],
+                "checks": [{"label": "every region now has the same number of rows", "ok": after["rows_after"].nunique() == 1},
+                           {"label": "real rows were not changed", "ok": int((~balanced["is_synthetic"]).sum()) == len(prepared)}],
+                "reads": ["memory: prepared dataset"], "writes": ["memory: balanced dataset (synthetic rows flagged)"],
+                "chart": "balance",
+                "tables": [table(after, "Rows per region, before and after"),
+                           table(quality, "Do synthetic rows resemble the real rows of the same region?",
+                                 note="ks_distance compares the two distributions: 0 = identical, 1 = completely different."),
+                           table(balanced.loc[balanced["is_synthetic"]], "Examples of synthetic rows", limit=8)]}
 
     def _ai6(self) -> dict:
-        ns, analytical = self.ns, self.ctx["result"]["analytical"]
-        answers = ns["run_example_questions"](analytical)
-        refused = []
-        for attack in ("DROP TABLE requests", "SELECT 1; DELETE FROM requests", "UPDATE requests SET minutes = 0"):
-            try:
-                ns["run_safe_query"](analytical, attack)
-                refused.append(False)
-            except ValueError:
-                refused.append(True)
-        log = pd.DataFrame([{"question": a["question"], "sql": a["sql"], "rows_returned": int(len(a["table"]))} for a in answers])
-        (self.dir / "ai_output" / "example_questions.csv").write_bytes(ns["_csv_bytes"](log))
-        self.outputs.append({"group": "AI project", "name": "example_questions.csv", "url": self._url("ai_output/example_questions.csv")})
-        self.examples = [{"en": e["en"], "ar": e["ar"]} for e in ns["EXAMPLE_QUESTIONS"]]
-        manifest = self.ctx["result"]["manifest"]["files_sha256"]
+        ns, c = self.ns, self.ctx
+        comparison, fitted = ns["compare_preparations"](c["messy"], c["prepared"], c["balanced"])
+        data, X, labels = fitted["Prepared + balanced (SMOTE-NC)"]
+        points, profile = ns["cluster_points"](data, X, labels), ns["cluster_profile"](data, labels)
+        figures = {**c["figures"], **ns["make_prep_figures"](c["messy"], c["prepared"], c["balance_after"], points)}
+        facts, brief = ns["prep_brief_facts"](c["messy"], c["missing"], c["decisions"], c["dispersion"], c["balance_after"],
+                                              comparison, c["ratio"])
+        names = ns["write_prep_outputs"](self.dir / "ai_output", c["messy"], c["prepared"], c["balanced"], c["problems"],
+                                         c["decisions"], c["dispersion"], c["balance_after"], c["quality"], comparison,
+                                         profile, brief, figures)
+        self.outputs += [{"group": "AI project", "name": n, "url": self._url(f"ai_output/{n}")} for n in names]
+        manifest = c["result"]["manifest"]["files_sha256"]
         untouched = all(sha256((self.dir / "team_output" / n).read_bytes()) == d for n, d in manifest.items())
+        self.prep.update(comparison=json.loads(comparison.round(3).to_json(orient="records")),
+                         points=json.loads(points.round(3).to_json(orient="records")),
+                         facts=facts, brief=brief, best=facts["best_separated_version"],
+                         images={n: self._url(f"ai_output/{n}") for n in names if n.endswith(".png")})
         self._finish()
-        return {"headline": "A question becomes one SELECT statement, which runs on a read-only temporary copy. "
-                            "Open the “Ask the data” tab to try your own question.",
-                "metrics": [{"label": "built-in questions answered", "value": len(answers)},
-                            {"label": "unsafe statements refused", "value": f"{sum(refused)} of {len(refused)}"}],
-                "checks": [{"label": "DROP, DELETE and UPDATE statements are refused", "ok": all(refused)},
-                           {"label": "required outputs are still byte-for-byte unchanged", "ok": untouched}],
-                "reads": ["memory: analytical table → temporary read-only SQLite"],
-                "writes": ["ai_output/example_questions.csv", "Week06_Team06_Results.zip"],
-                "tables": [table(a["table"], a["question"], limit=10, note=a["sql"]) for a in answers]}
-
-    def ask(self, question: str, api_key: str | None) -> dict:
-        """Used by the “Ask the data” tab after the run has finished."""
-        answer = self.ns["answer_question"](question, self.ctx["result"]["analytical"], api_key=api_key)
-        return {"question": answer["question"], "sql": answer["sql"], "source": answer["source"],
-                "table": table(answer["table"], "Answer")}
+        naive = comparison.iloc[0]
+        return {"headline": f"The same K-Means model is trained on three versions of the data. Dropping incomplete rows keeps only "
+                            f"{naive['share_of_original_rows_pct']:.0f}% of them; best cluster separation: {facts['best_separated_version']}.",
+                "metrics": [{"label": "rows kept if incomplete rows are dropped", "value": f"{naive['share_of_original_rows_pct']:.0f}%"},
+                            {"label": "rows kept after preparation", "value": "100%"},
+                            {"label": "smallest region before → after", "value": f"{facts['smallest_region_before_pct']:.0f}% → {facts['smallest_region_after_pct']:.0f}%"}],
+                "checks": [{"label": "required outputs are byte-for-byte unchanged by the AI project", "ok": untouched}],
+                "reads": ["memory: messy, prepared and balanced datasets"], "writes": [f"ai_output/{n}" for n in names],
+                "chart": "model",
+                "tables": [table(comparison, "Same model, three versions of the data",
+                                 note="silhouette: cluster separation (higher is better). stability: agreement between runs with different seeds (1 = identical)."),
+                           table(profile, "What each cluster looks like (original units)")],
+                "text": brief, "text_title": f"AI brief ({len(brief.split())} words)"}
 
     # ------------------------------------------------------------------ whole-run views
     def _finish(self) -> None:
         """Data-flow diagram, per-row trace, and one ZIP with everything."""
         ns, c = self.ns, self.ctx
-        cleaned, analytical, scored = c["result"]["cleaned"], c["result"]["analytical"], c["scored"]
+        cleaned, analytical = c["result"]["cleaned"], c["result"]["analytical"]
         region_of = {(r.source, int(r.source_row)): r.region for r in analytical.itertuples()}
-        flag_of = {(r.source, int(r.source_row)): bool(r.both_flag) for r in scored.itertuples()}
         links: dict[tuple, int] = {}
         rows = []
 
@@ -501,7 +503,6 @@ class Run:
                     fate, detail = "duplicate", "exact copy of an earlier row"
                     add(f"src:{month}", "out:Exact duplicate")
                 rows.append({"source": month, "source_row": position, "fate": fate, "detail": detail,
-                             "unusual": flag_of.get(key, False),
                              **{k: record.get(k, "") for k in ns["RAW_COLUMNS"]}})
         self.flow = {"links": [{"from": a, "to": b, "value": v} for (a, b), v in links.items()],
                      "note": "A rejected row with two reasons is drawn once into each reason, "

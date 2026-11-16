@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from "react";
 import DataTable from "./DataTable.jsx";
-import AnomalyChart from "./AnomalyChart.jsx";
-import MetricBars from "./MetricBars.jsx";
+import { Bars, FillErrors, Dispersion, ModelCompare, ClusterScatter } from "./PrepCharts.jsx";
 import Scene from "./Scene.jsx";
-import PatternHeat from "./PatternHeat.jsx";
 
 const KIND_LABEL = { notebook: "Notebook code", program: "Program code", system: "Web app" };
 
-export default function StepDetail({ step, code, points, heat, animate = true }) {
+export default function StepDetail({ step, code, prep = {}, animate = true }) {
   const functions = step.functions.filter((name) => code[name]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(functions[0]);
@@ -95,9 +93,23 @@ export default function StepDetail({ step, code, points, heat, animate = true })
         </ul>
       )}
 
-      {ran && step.chart === "anomaly" && points && <AnomalyChart data={points} />}
-      {ran && step.chart === "heat" && heat && <PatternHeat heat={heat} />}
-      {ran && step.bars && <MetricBars rows={step.bars} />}
+      {ran && step.chart === "explore" && prep.missing && (
+        <div className="two">
+          <Bars title="Missing values by column" rows={prep.missing} unit="%" colorA="#f4ad53" />
+          <Bars title="Rows per region (class balance)" rows={prep.balance_before} />
+        </div>
+      )}
+      {ran && step.chart === "fill" && prep.fill && <FillErrors fill={prep.fill} />}
+      {ran && step.chart === "dispersion" && prep.dispersion && <Dispersion rows={prep.dispersion} />}
+      {ran && step.chart === "balance" && prep.balance_after && (
+        <Bars title="Rows per region after SMOTE-NC" rows={prep.balance_after} legend={["real rows", "synthetic rows"]} />
+      )}
+      {ran && step.chart === "model" && prep.comparison && (
+        <>
+          <ModelCompare rows={prep.comparison} best={prep.best} />
+          <ClusterScatter points={prep.points} />
+        </>
+      )}
 
       {ran && step.images && (
         <section className="gallery">

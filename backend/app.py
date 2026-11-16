@@ -1,7 +1,6 @@
 """FastAPI backend: upload files, run the notebook step by step, serve results and the web page."""
 from __future__ import annotations
 
-import os
 import sys
 import threading
 import uuid
@@ -11,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 
 from notebook_loader import load_notebook
@@ -32,8 +30,7 @@ def info():
     _, catalog = load_notebook()
     steps = [{"id": s[0], "label": s[1], "title": s[2], "kind": s[3], "owner": s[4], "functions": s[5]}
              for s in STEP_SPECS]
-    return {"steps": steps, "code": catalog, "expected_files": EXPECTED_FILES,
-            "llm_key_on_server": bool(os.environ.get("ANTHROPIC_API_KEY"))}
+    return {"steps": steps, "code": catalog, "expected_files": EXPECTED_FILES}
 
 
 @app.post("/api/runs")
@@ -58,25 +55,6 @@ def get_run(run_id: str):
     if run is None:
         raise HTTPException(404, "Unknown run.")
     return run.snapshot()
-
-
-class Question(BaseModel):
-    question: str
-    api_key: str | None = None
-
-
-@app.post("/api/runs/{run_id}/ask")
-def ask(run_id: str, body: Question):
-    """Question -> SQL -> table, using the notebook's own answer_question()."""
-    run = RUNS.get(run_id)
-    if run is None or run.status != "done":
-        raise HTTPException(409, "Run the pipeline first.")
-    # A key typed in the page is used for this request only; it is never written to disk.
-    key = (body.api_key or "").strip() or os.environ.get("ANTHROPIC_API_KEY")
-    try:
-        return run.ask(body.question, key)
-    except ValueError as error:
-        raise HTTPException(400, str(error))
 
 
 @app.get("/api/runs/{run_id}/files/{relative:path}")

@@ -3,10 +3,13 @@
 A local web app that takes the project files and shows, step by step, what the team notebook does with them and where the data goes.
 
 - **Notebook code** (EX01–EX10 + the SQL bonus): runs exactly as written, straight from the `.ipynb` file.
-- **Program code** (AI-1 to AI-6), stored as the last cells of the same notebook:
-  - AI-1 to AI-4: anomaly detection vs the fixed cleaning rule.
-  - AI-5: demand patterns across the week with K-Means.
-  - AI-6: ask the data in Arabic or English (question → safe, read-only SQL).
+- **Program code** (AI-1 to AI-6): EDA and data preparation for AI, stored as the last cells of the same notebook:
+  - AI-1: generate a synthetic dataset with planted problems (gaps that follow patterns, extreme values, skew, an under-represented region).
+  - AI-2: explore and measure the problems.
+  - AI-3: fill the gaps; mean or median is chosen from the column's shape, and the fill method by measured error.
+  - AI-4: cap extreme values and reduce skew with a power transform.
+  - AI-5: balance the small region with synthetic rows (SMOTE-NC).
+  - AI-6: train K-Means on naive, prepared and balanced data and compare.
 
 ## Run it (Python 3.10 or newer is all you need)
 
@@ -49,23 +52,10 @@ The server is fully local (`127.0.0.1`); nothing is uploaded to the internet.
 | Tab | Contents |
 |---|---|
 | Step by step | An animated scene for every step (a truck delivers the ZIP, a machine opens the carton, rows are sorted into bins, ...), plus what the step read, which function ran, what it wrote, its tables and checks, and the function's code from the notebook. Change the animation speed with the **Animation** menu |
-| AI project | The ideas behind the AI project and their results: fixed rule vs baseline vs model, and the K-Means demand patterns |
-| Ask the data | Type a question in Arabic or English; the SQL it becomes is shown with the answer |
+| AI data prep | The whole AI project on one page: what was found, how each gap was filled, before and after treatment, the balancing, and the model comparison |
 | Data flow | A diagram of where every raw row ended up: accepted (and in which region), rejected (and why), or duplicate |
 | Trace a row | Pick any row and see every function that touched it and where it stopped |
 | Outputs | Download the outputs: the eight required files, the SQL bonus, and the AI project files |
-
-## Ask the data: offline and with a language model
-
-- **Offline (default):** seven built-in questions, each in Arabic and English, work with no internet and no key.
-- **With a language model:** any question can be asked. Paste an Anthropic API key in the "API key (optional)" box of the tab, or set it before starting the server:
-
-```
-set ANTHROPIC_API_KEY=your-key
-python run.py
-```
-
-The key is used only for the request and is never written to disk. Whatever wrote the SQL, it is checked to be a single `SELECT` and runs on a temporary in-memory copy that only permits reading. The model name can be changed with the `LLM_MODEL` environment variable.
 
 ## How the notebook code runs unchanged
 
@@ -77,7 +67,7 @@ So if you edit a function in the notebook and replace the file in `backend/noteb
 
 ```
 run.py / run.bat        start the site
-requirements.txt        Python packages
+requirements.txt        Python packages (includes imbalanced-learn for SMOTE-NC)
 backend/
   app.py                FastAPI: upload, run status, files
   notebook_loader.py    loads the notebook's functions as they are
@@ -100,4 +90,4 @@ npm run build    # updates dist
 
 ## Notes
 
-The dataset is synthetic, so the results show how the method works, not real service performance. Step AI-3 takes several seconds because it trains the model 20 times. The language-model path of "Ask the data" needs internet access; everything else runs offline.
+The dataset is synthetic, so the results show how the method works, not real service performance. Steps AI-3 and AI-6 take a second or two because they test several methods and train the model repeatedly. Everything runs offline.

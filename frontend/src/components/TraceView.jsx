@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 
 const SOURCE_FILE = { jan: "inputs/jan_requests.csv", feb: "inputs/feb_requests.csv", mar: "inputs/team_data.db · table march_requests" };
-const FATES = ["all", "accepted", "rejected", "duplicate", "unusual"];
+const FATES = ["all", "accepted", "rejected", "duplicate"];
 const PAGE = 60;
 
 function journey(row) {
@@ -15,16 +15,12 @@ function journey(row) {
   }
   if (row.fate === "rejected") {
     steps.push(["EX03", `clean_month() rejects it: ${row.detail.replaceAll(";", " + ").replaceAll("_", " ")}. It is kept in the rejected table with its reasons and goes no further.`, "rej"]);
-    if (row.detail === "implausible_minutes") steps.push(["AI-1", "The AI project still scores it, to check whether the detectors agree with the rule."]);
     return steps;
   }
   steps.push(["EX03", "clean_month() normalises the text, parses date and minutes, and accepts the row.", "acc"]);
   steps.push(["EX05", `integrate() joins it to the desk lookup: ${row.detail} region. Written to team_output/analytical_table.csv.`]);
   steps.push(["EX06–07", `Counted in the ${row.detail} totals for its month (targets comparison and summaries).`]);
-  const blank = ["", "unknown", "n/a"].includes(String(row.minutes).trim().toLowerCase());
-  steps.push(blank
-    ? ["AI-1", "Its duration is missing, so the detectors do not score it. The value stays missing."]
-    : ["AI-2", row.unusual ? "Both detectors call its duration unusual for its request type: listed for review, not rejected." : "Scored by both detectors: nothing unusual.", row.unusual ? "flag" : undefined]);
+  steps.push(["AI-1", "The AI project does not reuse this row. It only learns the request types, regions and typical durations from the accepted table to generate its own practice dataset."]);
   return steps;
 }
 
@@ -40,7 +36,7 @@ export default function TraceView({ rows }) {
     return rows.filter(
       (r) =>
         (source === "all" || r.source === source) &&
-        (fate === "all" || (fate === "unusual" ? r.unusual : r.fate === fate)) &&
+        (fate === "all" || r.fate === fate) &&
         (!q || `${r.request_id} ${r.desk_code} ${r.desk} ${r.request_type} ${r.detail}`.toLowerCase().includes(q))
     );
   }, [rows, source, fate, query]);
@@ -78,7 +74,7 @@ export default function TraceView({ rows }) {
                   onKeyDown={(e) => e.key === "Enter" && setPicked(r)}>
                   <td>{r.source}</td><td className="num">{r.source_row}</td><td>{r.request_id}</td><td>{r.request_type}</td>
                   <td>{r.minutes === "" ? <span className="null">empty</span> : r.minutes}</td>
-                  <td><span className={`fate ${r.fate}`}>{r.fate}</span>{r.unusual && <span className="fate unusual">unusual</span>}</td>
+                  <td><span className={`fate ${r.fate}`}>{r.fate}</span></td>
                 </tr>
               ))}
             </tbody>

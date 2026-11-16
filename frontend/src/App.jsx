@@ -6,14 +6,12 @@ import FlowView from "./components/FlowView.jsx";
 import TraceView from "./components/TraceView.jsx";
 import OutputsView from "./components/OutputsView.jsx";
 import AiView, { AiIdea } from "./components/AiView.jsx";
-import AskView from "./components/AskView.jsx";
 
 // Animation speed: how long each step's scene plays before the next step is revealed.
 const SPEEDS = { Normal: { ms: 2900, k: 1 }, Fast: { ms: 1300, k: 0.42 }, Off: { ms: 350, k: 0.001 } };
 const TABS = [
   ["steps", "Step by step"],
-  ["ai", "AI project"],
-  ["ask", "Ask the data"],
+  ["ai", "AI data prep"],
   ["flow", "Data flow"],
   ["trace", "Trace a row"],
   ["outputs", "Outputs"],
@@ -187,11 +185,10 @@ export default function App() {
                   setSelected(i);
                 }}
               />
-              {current && <StepDetail step={current} code={run?.code ?? info?.code ?? {}} points={run?.points} heat={run?.heat} animate={speed !== "Off"} />}
+              {current && <StepDetail step={current} code={run?.code ?? info?.code ?? {}} prep={run?.prep} animate={speed !== "Off"} />}
             </div>
           )}
-          {tab === "ai" && finished && <AiView steps={steps} points={run.points} heat={run.heat} />}
-          {tab === "ask" && finished && <AskView runId={runId} examples={run.examples ?? []} keyOnServer={info?.llm_key_on_server} />}
+          {tab === "ai" && finished && <AiView prep={run.prep ?? {}} />}
           {tab === "flow" && finished && <FlowView flow={run.flow} />}
           {tab === "trace" && finished && <TraceView rows={run.rows} />}
           {tab === "outputs" && finished && <OutputsView outputs={run.outputs} />}
@@ -201,7 +198,7 @@ export default function App() {
       {!runId && info && (
         <section className="preview">
           <h2>The AI project in one picture</h2>
-          <p className="lead">Can a detector that learns what is normal for each request type catch what the notebook's fixed rule misses?</p>
+          <p className="lead">EDA for modelling: a messy dataset is explored, repaired and balanced, then an unsupervised model shows whether the preparation mattered.</p>
           <AiIdea />
           <h2>What will run</h2>
           <div className="work">

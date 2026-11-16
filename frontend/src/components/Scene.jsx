@@ -276,122 +276,126 @@ const SCENES = {
     </g>
   ),
 
-  ai1: (step) => (
-    <g>
-      <Belt />
-      <Robot x={650} y={86} />
-      <path d="M560 150h76l-8 34h-60z" fill={C.teal} opacity=".18" stroke={C.teal} strokeWidth="2.5" />
-      {Array.from({ length: 14 }, (_, i) => (
-        <circle key={i} cx={574 + (i % 5) * 12} cy={176 - Math.floor(i / 5) * 11} r="5" fill={i % 6 === 4 ? C.red : C.grey}
-          style={{ ...an("sc-fromLeft", 0.9, i * 0.11, "linear"), "--dx": `${-(480 + (i % 5) * 12)}px` }} />
-      ))}
-      <text x="250" y="90" textAnchor="middle" className="scLabel">accepted rows + rows the 480 rule rejected</text>
-      <Count x={598} y={132} value={metric(step, "rows to score")} label="" />
-    </g>
-  ),
+  ai1: (step) => {
+    const cols = [C.indigo, C.indigo, C.indigo, C.teal, C.indigo, C.indigo, C.amber, C.indigo];
+    return (
+      <g>
+        <Belt />
+        <Machine x={60} y={78} w={190} h={106} label="make_messy_dataset()" />
+        {cols.map((color, r) => (
+          <g key={r} style={{ ...an("sc-fromLeft", 0.6, 0.2 + r * 0.17, "cubic-bezier(.2,.8,.3,1)"), "--dx": `${-(120 + r * 70)}px` }}>
+            {[0, 1, 2, 3].map((c) => {
+              const hole = (r * 3 + c * 5) % 7 === 2, big = r === 4 && c === 1;
+              return hole
+                ? <rect key={c} x={290 + r * 70} y={62 + c * 30} width="56" height="22" rx="5" fill="none" stroke={C.red} strokeWidth="2" strokeDasharray="5 4" />
+                : <rect key={c} x={290 + r * 70 - (big ? 6 : 0)} y={62 + c * 30 - (big ? 6 : 0)} width={big ? 68 : 56} height={big ? 34 : 22} rx="5" fill={c === 0 ? color : C.grey} opacity={c === 0 ? 1 : 0.6} />;
+            })}
+          </g>
+        ))}
+        <text x="570" y="40" textAnchor="middle" className="scLabel">rows with gaps, one extreme value, and far more of one group</text>
+        <Count x={155} y={46} value={metric(step, "empty cells")} label="empty cells" color={C.red} />
+      </g>
+    );
+  },
 
   ai2: (step) => (
     <g>
-      <Belt />
-      <rect x="410" y="44" width="14" height="142" fill={C.ink} /><rect x="496" y="44" width="14" height="142" fill={C.ink} />
-      <rect x="400" y="34" width="120" height="22" rx="6" fill={C.teal} /><text x="460" y="50" textAnchor="middle" className="scTiny" fill="#fff">score_table()</text>
-      <rect x="424" y="56" width="72" height="130" fill={C.teal} opacity=".12" className="blink" />
-      {Array.from({ length: 12 }, (_, i) => {
-        const odd = i % 4 === 2, x = 560 + (i % 6) * 44, y = 172 - Math.floor(i / 6) * 34;
-        return (
-          <g key={i} style={{ ...an("sc-fromLeft", 1.0, i * 0.14, "linear"), "--dx": `${-(x - 80)}px` }}>
-            <circle cx={x} cy={y} r={odd ? 9 : 7} fill={odd ? C.amber : C.grey} stroke={odd ? C.ink : "none"} strokeWidth="1.5" />
-            {odd && <circle cx={x} cy={y} r="16" fill="none" stroke={C.amber} strokeWidth="2.5" className="popBox" style={an("sc-pop", 0.4, 1.3 + i * 0.14)} />}
-          </g>
-        );
-      })}
-      <Robot x={270} y={20} />
-      <Count x={690} y={70} value={metric(step, "accepted rows flagged by both")} label="accepted rows look unusual" color="#b9770e" />
+      <rect x="150" y="40" width="400" height="160" rx="8" fill={C.paper} stroke={C.soft} strokeWidth="2" />
+      {[0, 1, 2, 3, 4, 5].map((r) => [0, 1, 2, 3, 4].map((c) => {
+        const hole = (r * 5 + c * 3) % 8 === 3;
+        return hole
+          ? <rect key={`${r}${c}`} x={166 + c * 76} y={56 + r * 23} width="64" height="13" rx="4" fill={C.amber} style={an("sc-flash", 0.5, 0.5 + (r + c) * 0.15)} />
+          : <rect key={`${r}${c}`} x={166 + c * 76} y={56 + r * 23} width="64" height="13" rx="4" fill={C.grey} opacity=".5" />;
+      }))}
+      <g className="scan"><circle cx="200" cy="80" r="26" fill="#fff" fillOpacity=".35" stroke={C.ink} strokeWidth="5" /><path d="M219 99l22 22" stroke={C.ink} strokeWidth="7" strokeLinecap="round" /></g>
+      {[[96, C.indigo], [34, C.teal], [11, C.amber]].map(([h, color], i) => (
+        <rect key={i} x={620 + i * 46} y={170 - h} width="34" height={h} rx="4" fill={color} className="growY" style={an("sc-grow", 0.6, 1.2 + i * 0.15)} />
+      ))}
+      <text x="686" y="190" textAnchor="middle" className="scTiny">rows per region</text>
+      <Count x={800} y={110} value={metric(step, "columns with gaps")} label="columns with gaps" color="#b9770e" />
     </g>
   ),
 
-  ai3: () => (
+  ai3: (step) => (
     <g>
-      <text x="230" y="36" textAnchor="middle" className="scLabel">1 · hide known anomalies</text>
-      <text x="660" y="36" textAnchor="middle" className="scLabel">2 · can the detectors find them?</text>
-      {[0, 1].map((side) => Array.from({ length: 40 }, (_, i) => {
-        const planted = [7, 18, 26, 33].includes(i), x = 110 + side * 430 + (i % 10) * 26, y = 62 + Math.floor(i / 10) * 34;
+      <text x="450" y="30" textAnchor="middle" className="scLabel">each gap is filled by the method with the lowest measured error</text>
+      <rect x="230" y="44" width="440" height="160" rx="8" fill={C.paper} stroke={C.soft} strokeWidth="2" />
+      {[0, 1, 2, 3, 4, 5].map((r) => [0, 1, 2, 3, 4].map((c) => {
+        const hole = (r * 5 + c * 3) % 8 === 3, x = 248 + c * 82, y = 60 + r * 23;
         return (
-          <g key={`${side}${i}`}>
-            <circle cx={x} cy={y} r="7" fill={planted ? C.red : C.grey} opacity={planted ? 1 : 0.6} className="popBox" style={planted ? an("sc-pop", 0.4, 0.3 + (i % 4) * 0.15 + side * 0.9) : undefined} />
-            {planted && side === 1 && <circle cx={x} cy={y} r="14" fill="none" stroke={i === 26 ? C.grey : C.indigo} strokeWidth="3" strokeDasharray={i === 26 ? "4 4" : "none"} className="popBox" style={an("sc-pop", 0.4, 1.7 + (i % 4) * 0.15)} />}
+          <g key={`${r}${c}`}>
+            {hole && <rect x={x} y={y} width="70" height="13" rx="4" fill="none" stroke={C.red} strokeWidth="1.5" strokeDasharray="4 3" style={an("sc-out", 0.3, 0.6 + (r + c) * 0.16)} />}
+            <rect x={x} y={y} width="70" height="13" rx="4" fill={hole ? C.teal : C.grey} opacity={hole ? 1 : 0.5} className="popBox" style={hole ? an("sc-pop", 0.35, 0.6 + (r + c) * 0.16) : undefined} />
           </g>
         );
       }))}
-      <path d="M392 114h70m-12-9 12 9-12 9" fill="none" stroke={C.ink} strokeWidth="3" strokeLinecap="round" />
-      <text x="450" y="216" textAnchor="middle" className="scTiny">repeated 20 times with fixed seeds, so the score is repeatable</text>
+      <Count x={130} y={120} value={metric(step, "cells filled")} label="cells filled" color="#12968f" />
+      <Count x={770} y={120} value={metric(step, "gaps left")} label="gaps left" />
     </g>
   ),
 
   ai4: () => (
     <g>
-      <rect x="250" y="26" width="240" height="184" rx="8" fill={C.paper} stroke={C.soft} strokeWidth="2" />
-      <rect x="330" y="16" width="80" height="20" rx="6" fill={C.ink} />
-      {[[C.grey, 12], [C.teal, 104], [C.indigo, 98]].map(([color, h], i) => <rect key={i} x={282 + i * 62} y={180 - h} width="44" height={h} rx="5" fill={color} className="growY" style={an("sc-grow", 0.6, 0.2 + i * 0.2)} />)}
-      {["rule", "baseline", "model"].map((t, i) => <text key={t} x={304 + i * 62} y="198" textAnchor="middle" className="scTiny">{t}</text>)}
-      <g className="popBox" style={an("sc-stamp", 0.45, 1.5, "cubic-bezier(.2,1.4,.4,1)")}>
-        <circle cx="640" cy="118" r="62" fill="none" stroke={C.teal} strokeWidth="6" />
-        <circle cx="640" cy="118" r="50" fill="none" stroke={C.teal} strokeWidth="2" />
-        <text x="640" y="112" textAnchor="middle" className="scLabel" fill="#12968f">VERDICT</text>
-        <text x="640" y="132" textAnchor="middle" className="scTiny" fill="#12968f">from the numbers</text>
-      </g>
+      <text x="230" y="30" textAnchor="middle" className="scLabel">extreme values are capped at the fence</text>
+      <line x1="80" y1="190" x2="380" y2="190" stroke="#c9d0e0" strokeWidth="4" />
+      {[46, 60, 38, 150, 52, 44, 130, 58].map((h, i) => {
+        const capped = Math.min(h, 84);
+        return (
+          <g key={i}>
+            {h > 84 && <rect x={96 + i * 34} y={190 - h} width="22" height={h - 84} rx="3" fill={C.red} opacity=".7" style={an("sc-out", 0.6, 1.0 + i * 0.05)} />}
+            <rect x={96 + i * 34} y={190 - capped} width="22" height={capped} rx="3" fill={h > 84 ? C.amber : C.indigo} />
+          </g>
+        );
+      })}
+      <line x1="80" y1="106" x2="380" y2="106" stroke={C.ink} strokeWidth="2" strokeDasharray="6 5" style={an("sc-fade", 0.4, 0.5)} />
+      <text x="384" y="102" className="scTiny" style={an("sc-fade", 0.4, 0.5)}>fence</text>
+      <text x="670" y="30" textAnchor="middle" className="scLabel">a power transform removes the long tail</text>
+      <line x1="500" y1="190" x2="840" y2="190" stroke="#c9d0e0" strokeWidth="4" />
+      <path d="M510 188C540 188 548 70 580 70C612 70 640 160 720 178C770 186 810 188 836 188" fill="none" stroke={C.grey} strokeWidth="4" style={an("sc-out", 0.6, 1.5)} />
+      <path d="M510 188C580 188 610 64 670 64C730 64 760 188 836 188" fill="none" stroke={C.teal} strokeWidth="5" pathLength="1" style={{ ...an("sc-draw", 0.9, 1.6), strokeDasharray: 1, "--len": 1 }} />
     </g>
   ),
 
   ai5: (step) => {
-    const groups = [[C.indigo, 250, 92], [C.teal, 450, 132], [C.amber, 650, 88], [C.grey, 800, 150]];
-    const k = Math.min(metric(step, "patterns chosen") ?? 3, 4);
+    const real = [[610, 86], [668, 70], [704, 118], [640, 142], [716, 168], [600, 176]];
+    const made = [[639, 78], [686, 94], [672, 130], [678, 155], [620, 159], [657, 106], [710, 143], [625, 114]];
     return (
       <g>
-        <text x="450" y="30" textAnchor="middle" className="scLabel">each dot is one hour of the week; similar hours gather into a pattern</text>
-        {Array.from({ length: 36 }, (_, i) => {
-          const g = i % k, [color, gx, gy] = groups[g];
-          const x = gx + Math.cos(i * 2.4) * (14 + (i % 5) * 6), y = gy + Math.sin(i * 2.4) * (10 + (i % 4) * 5);
-          const sx = 80 + ((i * 97) % 740) - x, sy = 60 + ((i * 53) % 130) - y;
-          return <circle key={i} cx={x} cy={y} r="7" fill={color} style={{ ...an("sc-gather", 1.3, 0.2 + (i % 6) * 0.08, "cubic-bezier(.4,0,.2,1)"), "--sx": `${sx}px`, "--sy": `${sy}px` }} />;
+        <text x="220" y="30" textAnchor="middle" className="scLabel">large region: many real rows</text>
+        {Array.from({ length: 46 }, (_, i) => <circle key={i} cx={110 + (i * 53) % 230} cy={56 + (i * 37) % 140} r="6" fill={C.indigo} opacity=".75" />)}
+        <text x="640" y="30" textAnchor="middle" className="scLabel">small region: new rows between real neighbours</text>
+        {made.map(([x, y], i) => {
+          const [ax, ay] = real[i % real.length], [bx, by] = real[(i + 1) % real.length];
+          return <path key={i} d={`M${ax} ${ay}L${bx} ${by}`} stroke={C.amber} strokeWidth="1.5" strokeDasharray="4 4" opacity=".7" style={an("sc-fade", 0.3, 0.5 + i * 0.18)} />;
         })}
-        {groups.slice(0, k).map(([color, gx, gy], i) => (
-          <g key={i} className="popBox" style={an("sc-pop", 0.45, 1.6 + i * 0.12)}>
-            <circle cx={gx} cy={gy} r="52" fill="none" stroke={color} strokeWidth="2.5" strokeDasharray="6 6" />
-            <text x={gx} y={gy + 74} textAnchor="middle" className="scTiny">Pattern {i + 1}</text>
-          </g>
-        ))}
+        {real.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="8" fill={C.amber} stroke={C.ink} strokeWidth="1.5" />)}
+        {made.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="7" fill="#fff" stroke={C.amber} strokeWidth="3" className="popBox" style={an("sc-pop", 0.35, 0.7 + i * 0.18)} />)}
+        <Count x={820} y={120} value={metric(step, "synthetic rows added")} label="synthetic rows" color="#b9770e" />
       </g>
     );
   },
 
-  ai6: () => (
-    <g>
-      <g style={{ ...an("sc-fromLeft", 0.6, 0.1), "--dx": "-200px" }}>
-        <path d="M60 60h250a14 14 0 0 1 14 14v44a14 14 0 0 1-14 14H110l-22 20v-20H60a14 14 0 0 1-14-14V74a14 14 0 0 1 14-14z" fill={C.paper} stroke={C.indigo} strokeWidth="2.5" />
-        <text x="185" y="92" textAnchor="middle" className="scLabel">Which region is busiest?</text>
-        <text x="185" y="114" textAnchor="middle" className="scLabel">أي منطقة أكثر طلبات؟</text>
+  ai6: () => {
+    const groups = [[C.indigo, 300, 110], [C.teal, 600, 120]];
+    return (
+      <g>
+        <text x="450" y="30" textAnchor="middle" className="scLabel">K-Means gathers similar requests into clusters</text>
+        {Array.from({ length: 40 }, (_, i) => {
+          const [color, gx, gy] = groups[i % 2];
+          const x = gx + Math.cos(i * 2.4) * (20 + (i % 5) * 12), y = gy + Math.sin(i * 2.4) * (12 + (i % 4) * 9);
+          const sx = 80 + ((i * 97) % 740) - x, sy = 50 + ((i * 53) % 140) - y;
+          return <circle key={i} cx={x} cy={y} r="7" fill={color} style={{ ...an("sc-gather", 1.3, 0.2 + (i % 6) * 0.08, "cubic-bezier(.4,0,.2,1)"), "--sx": `${sx}px`, "--sy": `${sy}px` }} />;
+        })}
+        {groups.map(([color, gx, gy], i) => (
+          <g key={i} className="popBox" style={an("sc-pop", 0.45, 1.6 + i * 0.12)}>
+            <ellipse cx={gx} cy={gy} rx="96" ry="62" fill="none" stroke={color} strokeWidth="2.5" strokeDasharray="6 6" />
+            <text x={gx} y={gy + 84} textAnchor="middle" className="scTiny">Cluster {i + 1}</text>
+          </g>
+        ))}
+        <text x="450" y="218" textAnchor="middle" className="scTiny">trained three times: naive, prepared, prepared + balanced</text>
       </g>
-      <path d="M336 100h44m-12-9 12 9-12 9" fill="none" stroke={C.ink} strokeWidth="3" strokeLinecap="round" style={an("sc-fade", 0.3, 0.8)} />
-      <g style={an("sc-rise", 0.5, 0.9)}>
-        <rect x="392" y="62" width="200" height="76" rx="10" fill={C.ink} />
-        <text x="408" y="88" className="scTiny" fill="#9fe8e2">SELECT region, COUNT(*)</text>
-        <text x="408" y="106" className="scTiny" fill="#9fe8e2">FROM requests</text>
-        <text x="408" y="124" className="scTiny" fill="#9fe8e2">GROUP BY region</text>
-      </g>
-      <g className="popBox" style={an("sc-pop", 0.4, 1.5)}>
-        <path d="M492 150l26 10v20c0 16-12 26-26 32-14-6-26-16-26-32v-20z" fill={C.teal} />
-        <path d="M480 180l9 9 16-18" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" />
-      </g>
-      <text x="560" y="186" className="scTiny" style={an("sc-fade", 0.4, 1.7)}>read-only check</text>
-      <path d="M604 100h44m-12-9 12 9-12 9" fill="none" stroke={C.ink} strokeWidth="3" strokeLinecap="round" style={an("sc-fade", 0.3, 1.9)} />
-      <g style={an("sc-rise", 0.5, 2.0)}>
-        <rect x="660" y="52" width="190" height="112" rx="8" fill={C.paper} stroke={C.soft} strokeWidth="2" />
-        <rect x="660" y="52" width="190" height="20" rx="8" fill={C.teal} />
-        {[150, 118, 96].map((w, r) => <rect key={r} x="672" y={84 + r * 24} width={w} height="12" rx="6" fill={C.indigo} opacity={0.85 - r * 0.2} />)}
-      </g>
-    </g>
-  ),
+    );
+  },
 };
 
 export default function Scene({ step, live, replay }) {
