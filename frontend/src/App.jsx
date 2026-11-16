@@ -30,9 +30,16 @@ export default function App() {
 
   useEffect(() => {
     fetch("/api/info")
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail ?? "The backend reported an error.");
+        return data;
+      })
       .then(setInfo)
-      .catch(() => setProblem("The Python backend is not reachable. Start it with: python run.py"));
+      .catch((error) =>
+        setProblem(error instanceof TypeError || error instanceof SyntaxError
+          ? "The Python backend is not reachable. Start it with: python run.py"
+          : String(error.message)));
   }, []);
 
   // Poll the backend while a run is in progress.

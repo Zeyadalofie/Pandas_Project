@@ -81,6 +81,10 @@ def load_notebook(path: Path = NOTEBOOK_PATH):
             module = ast.Module(body=[node], type_ignores=[])
             try:
                 exec(compile(module, f"<notebook cell {index}>", "exec"), namespace)
+            except ImportError as error:
+                # A missing package must stop here with a clear message, not fail later inside a step.
+                raise RuntimeError(f"A Python package the notebook needs is not installed ({error}). "
+                                   "Stop the server and run:  pip install -r requirements.txt") from None
             except Exception:
                 if isinstance(node, ast.FunctionDef):
                     raise

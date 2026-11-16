@@ -27,7 +27,10 @@ RUNS: dict[str, Run] = {}
 @app.get("/api/info")
 def info():
     """What the page needs before any upload: the steps and the notebook's own code."""
-    _, catalog = load_notebook()
+    try:
+        _, catalog = load_notebook()
+    except Exception as error:
+        raise HTTPException(500, str(error))
     steps = [{"id": s[0], "label": s[1], "title": s[2], "kind": s[3], "owner": s[4], "functions": s[5]}
              for s in STEP_SPECS]
     return {"steps": steps, "code": catalog, "expected_files": EXPECTED_FILES}
